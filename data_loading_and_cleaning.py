@@ -6,7 +6,6 @@ import seaborn as sns
 # Set display options to show more columns and rows
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 1000)
-pd.set_option('display.max_rows', 50)
 
 # Load the data
 file_path = 'aac_shelter_cat_outcome_eng.csv'  # Update this path if needed
