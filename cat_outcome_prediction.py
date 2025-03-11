@@ -4,6 +4,7 @@
 
 import pandas as pd
 import numpy as np
+import scipy.sparse
 from sklearn.model_selection import train_test_split, KFold
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
 from sklearn.compose import ColumnTransformer
@@ -177,9 +178,10 @@ def create_voting_classifier(X_train, y_train):
     voting_clf.fit(X_train, y_train)
     return voting_clf
 
-def perform_kfold_cross_validation(X, y, label_encoder, n_splits=5):
+def perform_kfold_cross_validation(X_data, y_data, label_encoder, n_splits=5):
     """Performs k-fold cross-validation with the required format in the assignment"""
     print("\n===== Cross-Validation with Required KFold Format =====")
+    print(f"X data shape: {X_data.shape}")  # Added to debug dimension issues
 
     # Create models
     models = getUnfitModels()
@@ -194,12 +196,12 @@ def perform_kfold_cross_validation(X, y, label_encoder, n_splits=5):
                     for name in model_names}
 
     # Loop through folds using the required format from the assignment
-    for fold, (train_index, test_index) in enumerate(kfold.split(X), 1):
+    for fold, (train_index, test_index) in enumerate(kfold.split(X_data), 1):
         print(f"\n--- Fold {fold}/{n_splits} ---")
 
         # Split data for this fold
-        X_fold_train, X_fold_test = X[train_index], X[test_index]
-        y_fold_train, y_fold_test = y[train_index], y[test_index]
+        X_fold_train, X_fold_test = X_data[train_index], X_data[test_index]
+        y_fold_train, y_fold_test = y_data[train_index], y_data[test_index]
 
         # Apply SMOTE to the training data in this fold
         X_fold_train_resampled, y_fold_train_resampled = apply_smote_balancing(X_fold_train, y_fold_train)
@@ -232,6 +234,7 @@ def perform_kfold_cross_validation(X, y, label_encoder, n_splits=5):
         bagging_clf = create_bagged_model(X_fold_train_resampled, y_fold_train_resampled)
         y_bagging_pred = bagging_clf.predict(X_fold_test)
         y_bagging_pred_original = label_encoder.inverse_transform(y_bagging_pred)
+        y_test_original = label_encoder.inverse_transform(y_fold_test)
 
         bagging_metrics = evaluateModel(y_test_original, y_bagging_pred_original, "BaggingClassifier")
         fold_results['BaggingClassifier']['accuracy'].append(bagging_metrics['accuracy'])
@@ -518,14 +521,38 @@ def main():
 
     # Perform cross-validation with required format
     print("\nPerforming cross-validation with required format...")
+
+    # Convert sparse matrices to dense if needed - FIX FOR SPARSE MATRIX ISSUE
+    if scipy.sparse.issparse(X_train_processed):
+        X_train_processed_dense = X_train_processed.toarray()
+    else:
+        X_train_processed_dense = X_train_processed
+
+    if scipy.sparse.issparse(X_val_processed):
+        X_val_processed_dense = X_val_processed.toarray()
+    else:
+        X_val_processed_dense = X_val_processed
+
     # Combine train and validation sets for cross-validation
-    X_train_val = np.vstack((X_train_processed, X_val_processed))
+    X_train_val = np.vstack((X_train_processed_dense, X_val_processed_dense))
     y_train_val = np.concatenate((y_train, y_val))
+
+    # Debug information
+    print(f"X_train_processed shape: {X_train_processed.shape}")
+    print(f"X_val_processed shape: {X_val_processed.shape}")
+    print(f"X_train_val shape: {X_train_val.shape}")
+    print(f"y_train_val shape: {y_train_val.shape}")
 
     cv_results = perform_kfold_cross_validation(X_train_val, y_train_val, label_encoder, n_splits=5)
 
     # Train final models and evaluate on test set
     print("\nTraining final models and evaluating on test set...")
+    # Convert sparse to dense if needed for test set
+    if scipy.sparse.issparse(X_train_processed):
+        X_train_processed = X_train_processed.toarray()
+    if scipy.sparse.issparse(X_test_processed):
+        X_test_processed = X_test_processed.toarray()
+
     test_results = train_and_evaluate_models_on_test(
         X_train_processed, y_train,
         X_test_processed, y_test,
